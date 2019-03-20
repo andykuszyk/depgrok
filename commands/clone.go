@@ -40,9 +40,9 @@ func Clone(c *cli.Context) {
         page += 1
     }
 
-    fmt.Println("Found %d repos, cloning them into `dir`...", len(repos))
+    fmt.Printf("Found %d repos, cloning them into `dir`...\n", len(repos))
     for _, repo := range repos {
-        fmt.Printf("Cloning %v...", repo["name"])
+        fmt.Printf("Cloning %v...\n", repo["name"])
         gitClone := exec.Command("git", "clone", repo["ssh_url"].(string), "--depth", "1")
         gitClone.Dir = dir
         err := gitClone.Run()
