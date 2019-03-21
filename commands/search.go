@@ -132,5 +132,6 @@ func Search(c *cli.Context) {
             diagram := diagramsByRepo[repo]
             fmt.Println(diagram.text)
         }
+        fmt.Println("")
     }
 }
