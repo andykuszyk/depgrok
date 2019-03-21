@@ -25,13 +25,7 @@ func (d *dependant) addRepo(repo string) {
     d.repos[repo] = true
 }
 
-// searchChildren is a recursive function that searches a directory tree
-// for references to dependants.
-//
-// repo is the root directory of a search. If nil is provided, the path of any
-// sub-directories that are searched is used.
-//
-// parent is the name of the current directory (just the directory name) being searched.
+// searchChildren is a recursive function that searches a directory tree for references to dependants.
 func searchChildren(repo string, parent string, dependants []*dependant, level int) []*dependant {
     parentInfo, _ := os.Stat(parent) 
     if parentInfo.IsDir() {

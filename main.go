@@ -3,7 +3,7 @@ package main
 import (
     "os"
     "github.com/urfave/cli"
-    "github.com/carfinance247/depgrok/commands"
+    "github.com/andykuszyk/depgrok/commands"
 )
 
 func main() {

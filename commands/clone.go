@@ -10,6 +10,8 @@ import (
     "os/exec"
 )
 
+// Clone will clone all repos from a GitHub organisation, with minimal depth, so that
+// their contents can be traversed by the `search` command
 func Clone(c *cli.Context) {
     org := c.String("org")
     token := c.String("token")
