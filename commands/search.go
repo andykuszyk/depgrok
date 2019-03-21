@@ -7,16 +7,20 @@ import (
     "log"
     "io/ioutil"
     "path/filepath"
+    "os"
 )
 
 type dependant struct {
     name string
     parent *dependant
-    repos []string
+    repos map[string]bool
 }
 
 func (d *dependant) addRepo(repo string) {
-    d.repos = append(d.repos, repo)
+    if d.repos == nil {
+        d.repos = make(map[string]bool)
+    }
+    d.repos[repo] = true
 }
 
 // searchChildren is a recursive function that searches a directory tree
@@ -26,15 +30,12 @@ func (d *dependant) addRepo(repo string) {
 // sub-directories that are searched is used.
 //
 // parent is the name of the current directory (just the directory name) being searched.
-func searchChildren(repo string, parent string, dependants []dependant) {
-    children, err := ioutil.ReadDir(parent)
-    if err != nil {
-        log.Fatalf("Error reading %s: %v", parent, err)
-    }
-
-    if len(children) > 0 {
+func searchChildren(repo string, parent string, dependants []*dependant) {
+    parentInfo, _ := os.Stat(parent) 
+    if parentInfo.IsDir() {
+        children, _ := ioutil.ReadDir(parent)
         for _, child := range children {
-            if strings.HasPrefix(child.Name(), ".") {
+            if strings.HasPrefix(child.Name(), ".") || child.Name() == "bin" {
                 continue
             }
             newRepo := repo
@@ -43,13 +44,16 @@ func searchChildren(repo string, parent string, dependants []dependant) {
             }
             searchChildren(newRepo, filepath.Join(parent, child.Name()), dependants)
         }
-    }
-
-    bytes, err := ioutil.ReadFile(parent)
-    text := string(bytes)
-    for _, dep := range dependants {
-        if strings.Contains(text, dep.name) {
-            dep.addRepo(repo)
+    } else {
+        bytes, err := ioutil.ReadFile(parent)
+        if err != nil {
+            log.Fatalf("Error reading file %s: %v", parent, err)
+        }
+        text := string(bytes)
+        for _, dep := range dependants {
+            if strings.Contains(text, dep.name) {
+                dep.addRepo(repo)
+            }
         }
     }
 }
@@ -61,15 +65,15 @@ func Search(c *cli.Context) {
         log.Fatal("--deps and --dir are required flags")
     }
 
-    dependants := []dependant{}
+    dependants := []*dependant{}
     for _, item := range strings.Fields(deps) {
-        dependants = append(dependants, dependant { name: item })
+        dependants = append(dependants, &dependant { name: item })
     }
 
     searchChildren("", dir, dependants)
     for _, dep := range dependants {
-        for _, repo := range dep.repos {
-            fmt.Printf("%s -> %s\n", repo, dep)
+        for repo, _ := range dep.repos {
+            fmt.Printf("%s -> %s\n", repo, dep.name)
         }
     }
 }
