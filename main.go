@@ -46,6 +46,14 @@ func main() {
                     Name: "dir",
                     Usage: "The directory containing code repositories, in which to search",
                 },
+                cli.IntFlag {
+                    Name: "depth",
+                    Usage: "The depth of the dependency tree to construct. E.g. a value of 1 (the default)"+
+                           " will result in direct dependency relationships being found (X depends on Y, "+
+                           " or X -> Y). A value of 2 results in direct relationships, with one dependency"+
+                           " in common being found (X depends on Z, via Y, or X -> Y -> Z).",
+                    Value: 1,
+                },
             },
         },
     }
