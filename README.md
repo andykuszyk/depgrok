@@ -1,4 +1,4 @@
-![](img src="https://travis-ci.org/andykuszyk/depgrok.svg?branch=master")
+![](https://travis-ci.org/andykuszyk/depgrok.svg?branch=master)
 
 # depgrok
 A [very] simple tool for groking dependencies between multiple projects.
