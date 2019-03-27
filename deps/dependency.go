@@ -108,6 +108,8 @@ type Dependencies struct {
 // Constructs a new Dependencies collection from the given list of dependency names.
 func BuildDependencies(dependencies []string) *Dependencies {
 	deps := Dependencies{}
+	deps.membership = make(map[string]bool)
+	deps.dependencies = make(map[string]*Dependency)
 	for _, item := range dependencies {
 		deps.Add(&Dependency{
 			Name: item,
