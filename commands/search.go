@@ -2,130 +2,100 @@ package commands
 
 import (
 	"fmt"
-	"github.com/urfave/cli"
 	"io/ioutil"
 	"log"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
+
+	"github.com/urfave/cli"
+	"github.com/andykuszyk/depgrok/deps"
 )
 
-type dependant struct {
-	name   string
-	parent *dependant
-	repos  map[string]bool
-	level  int
+// Returns true if the given parent is a valid candidate for a search,
+// otherwise false is returned (e.g. in the case of a filename beginning
+// with ".".
+func isValidParent(parent string) bool {
+	return !(strings.HasPrefix(parent, ".") || parent == "bin")
 }
 
-func (d *dependant) addRepo(repo string) {
-	if d.repos == nil {
-		d.repos = make(map[string]bool)
+// Recursively searches a file tree, amending and augmenting dependencies (at the given
+// level) as matches are discovered.
+func searchChildren(repo string, parent string, dependencies *deps.Dependencies, level int) {
+	parentInfo, err := os.Stat(parent)
+	if err != nil {
+		log.Fatalf("An error occured calling os.Stat(%s): %v", parent, err)
 	}
-	d.repos[repo] = true
-}
 
-// searchChildren is a recursive function that searches a directory tree for references to dependants.
-func searchChildren(repo string, parent string, dependants []*dependant, level int) []*dependant {
-	parentInfo, _ := os.Stat(parent)
+	// First, check if the parent location is a directory. If it is, traverse its children, if not
+	// interrogate its contents.
 	if parentInfo.IsDir() {
-		children, _ := ioutil.ReadDir(parent)
+		children, err := ioutil.ReadDir(parent)
+		if err != nil {
+			log.Fatalf("An error occured calling ioutil.ReadDir(%s): %v", parent, err)
+		}
+
+		// Traverse the children of the parent, making a recursive call to searchChildren
+		// if its a valid child.
 		for _, child := range children {
-			if strings.HasPrefix(child.Name(), ".") || child.Name() == "bin" {
+			if !isValidParent(child.Name()) {
 				continue
 			}
+			// If this is the first traversal of the root directory, no repo name will have been
+			// provided, so extract this from the child's name.
 			newRepo := repo
 			if newRepo == "" {
 				newRepo = child.Name()
 			}
-			dependants = searchChildren(newRepo, filepath.Join(parent, child.Name()), dependants, level)
+			searchChildren(newRepo, filepath.Join(parent, child.Name()), dependencies, level)
 		}
 	} else {
+		// Interrogate the file - read its contents out as a string.
 		bytes, err := ioutil.ReadFile(parent)
 		if err != nil {
 			log.Fatalf("Error reading file %s: %v", parent, err)
 		}
 		text := string(bytes)
-		for _, dep := range dependants {
-			if dep.level != level {
+
+		// Now, iterate though each of the dependencies at the current level (in order avoid
+		// worrying about new dependencies of a higher level that have been collected on this pass)
+		// and check for a reference within the file.
+		for _, dep := range dependencies.Slice() {
+			if dep.Level != level {
 				continue
 			}
-			if strings.Contains(text, dep.name) {
-				dep.addRepo(repo)
-				dependants = append(dependants, &dependant{name: parentInfo.Name(), parent: dep, level: level + 1})
+			if dep.Matches(text) {
+				dep.AddRepo(repo)
+				parentDependency := deps.Dependency{
+					Name: parentInfo.Name(),
+					Parent: dep,
+					Level: level + 1,
+				}
+				if !dependencies.Contains(parentDependency) {
+					dependencies.Add(&parentDependency)
+				}
 			}
 		}
-	}
-	return dependants
-}
-
-type dependancyDiagram struct {
-	text          string
-	dependantName string
-	repoName      string
-}
-
-func (d *dependant) buildDependencyDiagram(repo string) dependancyDiagram {
-	text := fmt.Sprintf("%s -> %s", repo, d.name)
-	depName := d.name
-	parent := d.parent
-	for parent != nil {
-		depName = parent.name
-		text = fmt.Sprintf("%s -> %s", text, parent.name)
-		parent = parent.parent
-	}
-	return dependancyDiagram{
-		text:          text,
-		dependantName: depName,
-		repoName:      repo,
 	}
 }
 
 func Search(c *cli.Context) {
-	deps := c.String("deps")
+	depsArg := c.String("deps")
 	dir := c.String("dir")
 	depth := c.Int("depth")
-	if dir == "" || deps == "" {
+	if dir == "" || depsArg == "" {
 		log.Fatal("--deps and --dir are required flags")
 	}
 
-	dependants := []*dependant{}
-	for _, item := range strings.Fields(deps) {
-		dependants = append(dependants, &dependant{name: item, level: 0})
-	}
-
+	// Construct list of dependencies and collect repo relationships
+	// by searching children.
+	dependencies := deps.BuildDependencies(strings.Fields(depsArg))
 	for i := 0; i < depth; i++ {
-		dependants = searchChildren("", dir, dependants, i)
+		searchChildren("", dir, dependencies, i)
 	}
 
-	diagramsByDepRepo := make(map[string]map[string]dependancyDiagram)
-	for _, dep := range dependants {
-		for repo, _ := range dep.repos {
-			diagram := dep.buildDependencyDiagram(repo)
-			if diagramsByDepRepo[diagram.dependantName] == nil {
-				diagramsByDepRepo[diagram.dependantName] = make(map[string]dependancyDiagram)
-			}
-			diagramsByDepRepo[diagram.dependantName][diagram.repoName] = diagram
-		}
-	}
-
-	depKeys := []string{}
-	for depKey, _ := range diagramsByDepRepo {
-		depKeys = append(depKeys, depKey)
-	}
-	sort.Strings(depKeys)
-	for _, depKey := range depKeys {
-		fmt.Printf("# %s:\n", depKey)
-		diagramsByRepo := diagramsByDepRepo[depKey]
-		repos := []string{}
-		for repo, _ := range diagramsByRepo {
-			repos = append(repos, repo)
-		}
-		sort.Strings(repos)
-		for _, repo := range repos {
-			diagram := diagramsByRepo[repo]
-			fmt.Println(diagram.text)
-		}
-		fmt.Println("")
+	// Print out diagrams to screen in a reasonable order.
+	for _, diagram := range dependencies.BuildDiagrams() {
+		fmt.Println(diagram.Text)
 	}
 }
