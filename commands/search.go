@@ -6,13 +6,13 @@ import (
 	"log"
 	"os"
 	"path/filepath"
-	"strings"
-	"time"
-	"sync"
 	"runtime"
+	"strings"
+	"sync"
+	"time"
 
-	"github.com/urfave/cli"
 	"github.com/andykuszyk/depgrok/deps"
+	"github.com/urfave/cli"
 )
 
 // Returns true if the given parent is a valid candidate for a search,
@@ -102,9 +102,9 @@ func searchChildren(repo string, parent string, dependencies *deps.Dependencies,
 			if dep.Matches(text) {
 				dep.AddRepo(repo)
 				parentDependency := deps.Dependency{
-					Name: parentInfo.Name(),
+					Name:   parentInfo.Name(),
 					Parent: dep,
-					Level: level + 1,
+					Level:  level + 1,
 				}
 				if !dependencies.Contains(parentDependency) {
 					dependencies.Add(&parentDependency)
@@ -120,7 +120,7 @@ func logDuration(start time.Time) {
 	fmt.Println("")
 }
 
-var sem = make(chan int, runtime.NumCPU() * 2)
+var sem = make(chan int, runtime.NumCPU()*2)
 
 func Search(c *cli.Context) {
 	depsArg := c.String("deps")

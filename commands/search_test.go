@@ -1,8 +1,8 @@
 package commands
 
 import (
-	"testing"
 	"fmt"
+	"testing"
 )
 
 func TestGetNextLoadingChar(t *testing.T) {

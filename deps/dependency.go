@@ -2,9 +2,9 @@ package deps
 
 import (
 	"errors"
-	"strings"
 	"fmt"
 	"sort"
+	"strings"
 	"sync"
 )
 
@@ -13,14 +13,14 @@ import (
 // level.
 //
 // e.g. a reference to an object or entity X might be represented as a Dependency of Name
-// X, which is related to a number of repositories, if it has a Level of 1. It might also 
+// X, which is related to a number of repositories, if it has a Level of 1. It might also
 // be related to a repository via an intermediate dependency of level 1, if it has a deeper
 // level (2, for example).
 type Dependency struct {
-	Name string
+	Name   string
 	Parent *Dependency
-	Repos map[string] bool
-	Level int
+	Repos  map[string]bool
+	Level  int
 }
 
 // Adds a new repo to a Dependency's Repos map, setting its mapped value to true,
@@ -37,13 +37,13 @@ func (d *Dependency) Matches(text string) bool {
 	return strings.Contains(text, d.Name)
 }
 
-// Represents a diagram illustrating the relationship between a Dependency and 
+// Represents a diagram illustrating the relationship between a Dependency and
 // a repo, along with additional information to help it be sorted into a convenient
 // display.
 type DependencyDiagram struct {
-	Text          string
+	Text           string
 	DependencyName string
-	RepoName      string
+	RepoName       string
 }
 
 // Constructs a DependencyDiagram from the information stored in a Dependency,
@@ -58,9 +58,9 @@ func (d *Dependency) DependencyDiagram(repo string) DependencyDiagram {
 		parent = parent.Parent
 	}
 	return DependencyDiagram{
-		Text:          text,
+		Text:           text,
 		DependencyName: depName,
-		RepoName:      repo,
+		RepoName:       repo,
 	}
 }
 
@@ -103,8 +103,8 @@ func (d *Dependencies) BuildDiagrams() []DependencyDiagram {
 // checking and additions to the collection.
 type Dependencies struct {
 	dependencies map[string]*Dependency
-	membership map[string]bool
-	mutex sync.Mutex
+	membership   map[string]bool
+	mutex        sync.Mutex
 }
 
 // Constructs a new Dependencies collection from the given list of dependency names.
@@ -114,7 +114,7 @@ func BuildDependencies(dependencies []string) *Dependencies {
 	deps.dependencies = make(map[string]*Dependency)
 	for _, item := range dependencies {
 		deps.Add(&Dependency{
-			Name: item,
+			Name:  item,
 			Level: 0,
 		})
 	}
