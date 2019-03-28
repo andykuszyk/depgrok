@@ -7,6 +7,9 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
+	"sync"
+	"runtime"
 
 	"github.com/urfave/cli"
 	"github.com/andykuszyk/depgrok/deps"
@@ -21,7 +24,15 @@ func isValidParent(parent string) bool {
 
 // Recursively searches a file tree, amending and augmenting dependencies (at the given
 // level) as matches are discovered.
-func searchChildren(repo string, parent string, dependencies *deps.Dependencies, level int) {
+func searchChildren(repo string, parent string, dependencies *deps.Dependencies, level int, wg *sync.WaitGroup) {
+	wg.Add(1)
+	defer wg.Done()
+	sem <- 1
+	releaseSem := func() {
+		<-sem
+	}
+	defer releaseSem()
+
 	parentInfo, err := os.Stat(parent)
 	if err != nil {
 		log.Fatalf("An error occured calling os.Stat(%s): %v", parent, err)
@@ -47,7 +58,7 @@ func searchChildren(repo string, parent string, dependencies *deps.Dependencies,
 			if newRepo == "" {
 				newRepo = child.Name()
 			}
-			searchChildren(newRepo, filepath.Join(parent, child.Name()), dependencies, level)
+			go searchChildren(newRepo, filepath.Join(parent, child.Name()), dependencies, level, wg)
 		}
 	} else {
 		// Interrogate the file - read its contents out as a string.
@@ -79,6 +90,14 @@ func searchChildren(repo string, parent string, dependencies *deps.Dependencies,
 	}
 }
 
+func logDuration(start time.Time) {
+	fmt.Println("")
+	fmt.Printf("The total time taken was: %v", time.Now().Sub(start).Seconds())
+	fmt.Println("")
+}
+
+var sem = make(chan int, runtime.NumCPU() * 2)
+
 func Search(c *cli.Context) {
 	depsArg := c.String("deps")
 	dir := c.String("dir")
@@ -87,12 +106,18 @@ func Search(c *cli.Context) {
 		log.Fatal("--deps and --dir are required flags")
 	}
 
+	// Record the time now and defer a timer until after execution is complete.
+	start := time.Now()
+	defer logDuration(start)
+
 	// Construct list of dependencies and collect repo relationships
 	// by searching children.
+	wg := sync.WaitGroup{}
 	dependencies := deps.BuildDependencies(strings.Fields(depsArg))
 	for i := 0; i < depth; i++ {
-		searchChildren("", dir, dependencies, i)
+		searchChildren("", dir, dependencies, i, &wg)
 	}
+	wg.Wait()
 
 	// Print out diagrams to screen in a reasonable order.
 	for _, diagram := range dependencies.BuildDiagrams() {

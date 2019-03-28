@@ -5,6 +5,7 @@ import (
 	"strings"
 	"fmt"
 	"sort"
+	"sync"
 )
 
 // Represents a dependency that is being searched for, which might be related to
@@ -103,6 +104,7 @@ func (d *Dependencies) BuildDiagrams() []DependencyDiagram {
 type Dependencies struct {
 	dependencies map[string]*Dependency
 	membership map[string]bool
+	mutex sync.Mutex
 }
 
 // Constructs a new Dependencies collection from the given list of dependency names.
@@ -121,6 +123,8 @@ func BuildDependencies(dependencies []string) *Dependencies {
 
 // Returns a slice of the Dependency items currently held by this instance.
 func (d *Dependencies) Slice() []*Dependency {
+	d.mutex.Lock()
+	defer d.mutex.Unlock()
 	s := []*Dependency{}
 	for _, v := range d.dependencies {
 		s = append(s, v)
@@ -131,13 +135,17 @@ func (d *Dependencies) Slice() []*Dependency {
 // Returns true if a Dependency of the same Name as dep is already present in the
 // Dependencies collection.
 func (d *Dependencies) Contains(dep Dependency) bool {
+	d.mutex.Lock()
+	defer d.mutex.Unlock()
 	return d.membership[dep.Name]
 }
 
 // Adds the given Dependency to the collection, returning an error if it already exists
 // by name. Nil is returned if the Dependency is added successfully.
 func (d *Dependencies) Add(dep *Dependency) error {
-	if d.Contains(*dep) {
+	d.mutex.Lock()
+	defer d.mutex.Unlock()
+	if d.membership[dep.Name] {
 		return errors.New("The collection already contains a Dependency with this name")
 	}
 	d.membership[dep.Name] = true
