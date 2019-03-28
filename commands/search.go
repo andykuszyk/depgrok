@@ -22,6 +22,29 @@ func isValidParent(parent string) bool {
 	return !(strings.HasPrefix(parent, ".") || parent == "bin")
 }
 
+func getNextLoadingCharFunc() func() string {
+	char := "|"
+	return func() string {
+		switch char {
+		case "|":
+			char = "/"
+			return char
+		case "/":
+			char = "-"
+			return char
+		case "-":
+			char = "\\"
+			return char
+		case "\\":
+			char = "|"
+			return char
+		}
+		return char
+	}
+}
+
+var getNextLoadingChar = getNextLoadingCharFunc()
+
 // Recursively searches a file tree, amending and augmenting dependencies (at the given
 // level) as matches are discovered.
 func searchChildren(repo string, parent string, dependencies *deps.Dependencies, level int, wg *sync.WaitGroup) {
@@ -62,6 +85,7 @@ func searchChildren(repo string, parent string, dependencies *deps.Dependencies,
 		}
 	} else {
 		// Interrogate the file - read its contents out as a string.
+		fmt.Fprintf(os.Stderr, "\rSearching...%s", getNextLoadingChar())
 		bytes, err := ioutil.ReadFile(parent)
 		if err != nil {
 			log.Fatalf("Error reading file %s: %v", parent, err)
