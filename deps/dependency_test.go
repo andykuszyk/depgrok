@@ -17,9 +17,20 @@ func TestDependencyAddRepo_ShouldAddRepo(t *testing.T) {
 	}
 }
 
+func TestDependencyMatches_ShouldNotMatchWhenTextSurroundedByOtherChars(t *testing.T) {
+	sut := Dependency{Name: "foo"}
+	text := "spamfooeggs"
+
+	result := sut.Matches(text)
+
+	if result {
+		t.Error("Text should not match when it is nested amongst other characters")
+	}
+}
+
 func TestDependencyMatches_ShouldMatchWhenTextContainsName(t *testing.T) {
 	sut := Dependency{Name: "foo"}
-	text := "foobar blah blah"
+	text := "bla.foo bar blah blah"
 
 	result := sut.Matches(text)
 

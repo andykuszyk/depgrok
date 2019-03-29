@@ -4,8 +4,8 @@ import (
 	"errors"
 	"fmt"
 	"sort"
-	"strings"
 	"sync"
+	"regexp"
 )
 
 // Represents a dependency that is being searched for, which might be related to
@@ -22,6 +22,7 @@ type Dependency struct {
 	Repos  map[string]bool
 	Level  int
 	mutex sync.Mutex
+	regexp *regexp.Regexp
 }
 
 // Adds a new repo to a Dependency's Repos map, setting its mapped value to true,
@@ -37,7 +38,14 @@ func (d *Dependency) AddRepo(repo string) {
 
 // Determines whether or not the Dependency is referenced in the given text.
 func (d *Dependency) Matches(text string) bool {
-	return strings.Contains(text, d.Name)
+	if d.regexp == nil {
+		r, err := regexp.Compile(fmt.Sprintf("[^a-zA-Z]%s[^a-zA-Z]", d.Name))
+		if err != nil {
+			return false
+		}
+		d.regexp = r
+	}
+	return d.regexp.FindString(text) != ""
 }
 
 // Represents a diagram illustrating the relationship between a Dependency and

@@ -55,7 +55,7 @@ func main() {
 					Value: 1,
 				},
 				cli.StringSliceFlag{
-					Name: "exclude",
+					Name:  "exclude",
 					Usage: "A glob or file to exclude from the dependency search, e.g. *.md",
 				},
 			},
