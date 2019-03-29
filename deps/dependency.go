@@ -21,6 +21,7 @@ type Dependency struct {
 	Parent *Dependency
 	Repos  map[string]bool
 	Level  int
+	mutex sync.Mutex
 }
 
 // Adds a new repo to a Dependency's Repos map, setting its mapped value to true,
@@ -29,6 +30,8 @@ func (d *Dependency) AddRepo(repo string) {
 	if d.Repos == nil {
 		d.Repos = make(map[string]bool)
 	}
+	d.mutex.Lock()
+	defer d.mutex.Unlock()
 	d.Repos[repo] = true
 }
 

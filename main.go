@@ -54,6 +54,10 @@ func main() {
 						" in common being found (X depends on Z, via Y, or X -> Y -> Z).",
 					Value: 1,
 				},
+				cli.StringSliceFlag{
+					Name: "exclude",
+					Usage: "A glob or file to exclude from the dependency search, e.g. *.md",
+				},
 			},
 		},
 	}

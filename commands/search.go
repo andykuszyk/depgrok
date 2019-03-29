@@ -37,9 +37,9 @@ func getNextLoadingCharFunc() func() string {
 			char = "/"
 			return char
 		case "/":
-			char = "--"
+			char = "-"
 			return char
-		case "--":
+		case "-":
 			char = "\\"
 			return char
 		case "\\":
@@ -69,18 +69,45 @@ var paralleliseSearches = true
 
 // Iterates over the children of a given parent path, calling searchChildren as a 
 // go routine on each.
-func traverseChildren(parent string, dependencies *deps.Dependencies, level int, wg *sync.WaitGroup, repo string) {
+func traverseChildren(parent string, dependencies *deps.Dependencies, level int, wg *sync.WaitGroup, repo string, exclude []string) {
 	children, err := ioutil.ReadDir(parent)
 	if err != nil {
 		log.Fatalf("An error occured calling ioutil.ReadDir(%s): %v", parent, err)
 	}
 
+	// See if any of the children in this parent match the exclusions provided, by first
+	// building up a list of files to exclude.
+	excludeMatches := []string{}
+	for _, exc := range exclude {
+		matches, err := filepath.Glob(filepath.Join(parent, exc))
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "An error occured handling the exclusion (%s): %v", exc, err)
+			continue
+		}
+		excludeMatches = append(excludeMatches, matches...)
+	}
+
 	// Traverse the children of the parent, making a recursive call to searchChildren
 	// if its a valid child.
 	for _, child := range children {
+		// First, check that the file name is a valid one for searching.
 		if !isValidParent(child.Name()) {
 			continue
 		}
+
+		// Then, check that the file is not supposed to be excluded by one of the provided
+		// globs.
+		excludeFile := false
+		for _, excludeMatch := range excludeMatches {
+			if filepath.Join(parent, child.Name()) == excludeMatch {
+				excludeFile = true
+				break
+			}
+		}
+		if excludeFile {
+			continue
+		}
+
 		// If this is the first traversal of the root directory, no repo name will have been
 		// provided, so extract this from the child's name.
 		newRepo := repo
@@ -88,9 +115,9 @@ func traverseChildren(parent string, dependencies *deps.Dependencies, level int,
 			newRepo = child.Name()
 		}
 		if paralleliseSearches {
-			go searchChildren(newRepo, filepath.Join(parent, child.Name()), dependencies, level, wg)
+			go searchChildren(newRepo, filepath.Join(parent, child.Name()), dependencies, level, wg, exclude)
 		} else {
-			searchChildren(newRepo, filepath.Join(parent, child.Name()), dependencies, level, wg)
+			searchChildren(newRepo, filepath.Join(parent, child.Name()), dependencies, level, wg, exclude)
 		}
 	}
 }
@@ -129,7 +156,7 @@ func searchFile(parent string, repo string, dependencies *deps.Dependencies, par
 
 // Recursively searches a file tree, amending and augmenting dependencies (at the given
 // level) as matches are discovered.
-func searchChildren(repo string, parent string, dependencies *deps.Dependencies, level int, wg *sync.WaitGroup) {
+func searchChildren(repo string, parent string, dependencies *deps.Dependencies, level int, wg *sync.WaitGroup, exclude []string) {
 	// Ensure that we add a counter to the waitgroup for this function call,
 	// and also wait on the "semaphore" channel to ensure too many parallel
 	// executions of this function are not taking place.
@@ -145,7 +172,7 @@ func searchChildren(repo string, parent string, dependencies *deps.Dependencies,
 	// interrogate its contents.
 	parentInfo := getFileInfo(parent)
 	if parentInfo.IsDir() {
-		traverseChildren(parent, dependencies, level, wg, repo)
+		traverseChildren(parent, dependencies, level, wg, repo, exclude)
 	} else {
 		searchFile(parent, repo, dependencies, parentInfo, level)
 	}
@@ -184,6 +211,7 @@ func Search(c *cli.Context) {
 	if dir == "" || depsArg == "" {
 		log.Fatal("--deps and --dir are required flags")
 	}
+	exclude := c.StringSlice("exclude")
 
 	// Record the time now and defer a timer until after execution is complete.
 	start := time.Now()
@@ -194,11 +222,12 @@ func Search(c *cli.Context) {
 	wg := sync.WaitGroup{}
 	dependencies := deps.BuildDependencies(strings.Fields(depsArg))
 	for i := 0; i < depth; i++ {
-		searchChildren("", dir, dependencies, i, &wg)
+		searchChildren("", dir, dependencies, i, &wg, exclude)
 		wg.Wait()
 	}
 
 	// Print out diagrams to screen in a reasonable order.
+	fmt.Println("")
 	for _, diagram := range dependencies.BuildDiagrams() {
 		fmt.Println(diagram.Text)
 	}

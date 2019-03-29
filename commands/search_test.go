@@ -13,7 +13,7 @@ func TestSearchChildren_ShouldFindSimpleDependency(t *testing.T) {
 	paralleliseSearches = false
 	wg := sync.WaitGroup{}
 	dependencies := deps.BuildDependencies(strings.Fields("dependency1"))
-	searchChildren("", filepath.Join("..", "testdata"), dependencies, 0, &wg)
+	searchChildren("", filepath.Join("..", "testdata"), dependencies, 0, &wg, []string{"*.md"})
 	wg.Wait()
 	slice := dependencies.Slice()
 	if len(slice) != 2 {
@@ -62,8 +62,8 @@ func TestGetNextLoadingChar(t *testing.T) {
 	}
 
 	char = getNextLoadingChar()
-	if char != "--" {
-		t.Errorf("Expected --, but got %s", char)
+	if char != "-" {
+		t.Errorf("Expected -, but got %s", char)
 	}
 
 	char = getNextLoadingChar()
