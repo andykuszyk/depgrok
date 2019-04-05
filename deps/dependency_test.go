@@ -2,7 +2,164 @@ package deps
 
 import (
 	"testing"
+	"sort"
+
+	"github.com/stretchr/testify/assert"
 )
+
+func TestDependencyDiagramKeys_Len(t *testing.T) {
+	sut := dependencyDiagramKeys{
+		items: []dependencyDiagramKey{
+			dependencyDiagramKey {
+				Name: "name1",
+				Repo: "repo1",
+				Level: 1,
+			},
+			dependencyDiagramKey {
+				Name: "name2",
+				Repo: "repo2",
+				Level: 2,
+			},
+		},
+	}
+
+	actual := sut.Len()
+
+	assert.Equal(t, 2, actual)
+}
+
+func TestDependencyDiagramKeys_CanSortByName(t *testing.T) {
+	sut := dependencyDiagramKeys{
+		items: []dependencyDiagramKey{
+			dependencyDiagramKey {
+				Name: "name2",
+				Repo: "repo1",
+				Level: 1,
+			},
+			dependencyDiagramKey {
+				Name: "name1",
+				Repo: "repo1",
+				Level: 1,
+			},
+		},
+	}
+
+	sort.Sort(&sut)
+
+	assert.Equal(t, "name1", sut.items[0].Name)
+	assert.Equal(t, "name2", sut.items[1].Name)
+}
+
+func TestDependencyDiagramKeys_CanSortByRepo(t *testing.T) {
+	sut := dependencyDiagramKeys{
+		items: []dependencyDiagramKey{
+			dependencyDiagramKey {
+				Name: "name1",
+				Repo: "repo2",
+				Level: 1,
+			},
+			dependencyDiagramKey {
+				Name: "name1",
+				Repo: "repo1",
+				Level: 1,
+			},
+		},
+	}
+
+	sort.Sort(&sut)
+
+	assert.Equal(t, "repo1", sut.items[0].Repo)
+	assert.Equal(t, "repo2", sut.items[1].Repo)
+}
+
+func TestDependencyDiagramKeys_CanSortByLevel(t *testing.T) {
+	sut := dependencyDiagramKeys{
+		items: []dependencyDiagramKey{
+			dependencyDiagramKey {
+				Name: "name1",
+				Repo: "repo1",
+				Level: 2,
+			},
+			dependencyDiagramKey {
+				Name: "name1",
+				Repo: "repo1",
+				Level: 1,
+			},
+		},
+	}
+
+	sort.Sort(&sut)
+
+	assert.Equal(t, 1, sut.items[0].Level)
+	assert.Equal(t, 2, sut.items[1].Level)
+}
+
+func TestDependencyDiagramKeys_CanSortByRepoNameLevel(t *testing.T) {
+	sut := dependencyDiagramKeys{
+		items: []dependencyDiagramKey{
+			dependencyDiagramKey {Name: "name2", Repo: "repo2", Level: 1},
+			dependencyDiagramKey {Name: "name1", Repo: "repo1", Level: 1},
+			dependencyDiagramKey {Name: "name1-ancestor", Repo: "repo1", Level: 2},
+			dependencyDiagramKey {Name: "name1-ancestor", Repo: "repo2", Level: 2},
+			dependencyDiagramKey {Name: "name2", Repo: "repo1", Level: 1},
+			dependencyDiagramKey {Name: "name1", Repo: "repo2", Level: 1},
+		},
+	}
+
+	sort.Sort(&sut)
+
+	for _, item := range sut.items[:3] {
+		assert.Equal(t, "repo1", item.Repo)
+	}
+	for _, item := range sut.items[3:] {
+		assert.Equal(t, "repo2", item.Repo)
+	}
+	assert.Equal(t, "name1", sut.items[0].Name)
+	assert.Equal(t, "name1-ancestor", sut.items[1].Name)
+	assert.Equal(t, "name2", sut.items[2].Name)
+	assert.Equal(t, "name1", sut.items[3].Name)
+	assert.Equal(t, "name1-ancestor", sut.items[4].Name)
+	assert.Equal(t, "name2", sut.items[5].Name)
+}
+
+func TestBuildDiagrams_WithTwoDepsTwoRepos(t *testing.T) {
+	sut := BuildDependencies([]string{"dep1", "dep2"})
+	sut.Slice()[0].AddRepo("repo1")
+	sut.Slice()[1].AddRepo("repo2")
+	sut.Slice()[1].Parent = sut.Slice()[0]
+	sut.Slice()[1].Level = 1
+
+	actual := sut.BuildDiagrams()
+
+	if len(actual) != 2 {
+		t.Errorf("Expected 2 diagrams, but found %d", len(actual))
+	}
+	t.Logf(actual[0].Text)
+	if actual[0].Text != "repo1 -> dep1" {
+		t.Errorf("Expected repo1 -> dep1, but got %s", actual[0].Text)
+	}
+	t.Logf(actual[1].Text)
+	if actual[1].Text != "repo2 -> dep2 -> dep1" {
+		t.Errorf("Expected repo2 -> dep2 -> dep1, but got %s", actual[1].Text)
+	}
+}
+
+func TestBuildDiagrams_WithTwoDepsSharedRepo(t *testing.T) {
+	sut := BuildDependencies([]string{"dep1", "dep2"})
+	sut.Slice()[0].AddRepo("repo1")
+	sut.Slice()[1].AddRepo("repo1")
+	sut.Slice()[1].Parent = sut.Slice()[0]
+	sut.Slice()[1].Level = 1
+
+	actual := sut.BuildDiagrams()
+
+	assert.Equal(t, 2, len(actual), "2 diagrams should be generated")
+	if len(actual) < 2 {
+		return
+	}
+	assert.Equal(t, "repo1 -> dep1", actual[0].Text)
+	assert.Equal(t, "repo1 -> dep2 -> dep1", actual[1].Text)
+}
 
 func TestDependencyAddRepo_ShouldAddRepo(t *testing.T) {
 	sut := Dependency{}

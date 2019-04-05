@@ -75,36 +75,87 @@ func (d *Dependency) DependencyDiagram(repo string) DependencyDiagram {
 	}
 }
 
+// A sortable key value representing a `DependencyDiagram`.
+type dependencyDiagramKey struct {
+	Name string
+	Repo string
+	Level int
+}
+
+// Represents an array of `dependencyDiagramKey`s, which can be sorted using `sort.Sort()`.
+type dependencyDiagramKeys struct {
+	items []dependencyDiagramKey
+}
+
+// Allows an element to be added to the collection maintained by `dependencyDiagramKeys`.
+func (k *dependencyDiagramKeys) Append(key dependencyDiagramKey) {
+	k.items = append(k.items, key)
+}
+
+// Provides a `Len` implementation for `sort.Interface`.
+func (k *dependencyDiagramKeys) Len() int {
+	return len(k.items)
+}
+
+// Provides a `Less` implementation for `sort.Interface`, sorting keys
+// repo, name and level.
+func (k *dependencyDiagramKeys) Less(i, j int) bool {
+	elementI := k.items[i]
+	elementJ := k.items[j]
+	if elementI.Repo < elementJ.Repo {
+		return true
+	}
+	if elementI.Repo > elementJ.Repo {
+		return false
+	}
+
+	if elementI.Name < elementJ.Name {
+		return true
+	}
+	if elementI.Name > elementJ.Name {
+		return false
+	}
+
+	return elementI.Level < elementJ.Level
+}
+
+// Provides a `Swap` implementation for `sort.Interface`.
+func (k *dependencyDiagramKeys) Swap(i, j int) {
+	elementI := k.items[i]
+	elementJ := k.items[j]
+	k.items[i] = elementJ
+	k.items[j] = elementI
+}
+
+// Exposes the collection of keys maintained by `dependencyDiagramKeys`.
+func (k *dependencyDiagramKeys) Items() []dependencyDiagramKey {
+	return k.items
+}
+
 // Constructs a set of DependencyDiagram representations from the Dependencies collection
 // and returns them grouped, sorted and de-duplicated, ready for display to the user.
 func (d *Dependencies) BuildDiagrams() []DependencyDiagram {
+	// First, make a list of DependencyDiagrams. This list will contain ordered diagrams,
+	// arranged ready to display to the user.
 	diagrams := []DependencyDiagram{}
-	diagramsByDepRepo := make(map[string]map[string]DependencyDiagram)
+
+	// Build a map of DependencyDiagrams, keyed by a dependencyDiagramKey.
+	diagramsByKey := make(map[dependencyDiagramKey]DependencyDiagram)
 	for _, dep := range d.dependencies {
 		for repo, _ := range dep.Repos {
-			diagram := dep.DependencyDiagram(repo)
-			if diagramsByDepRepo[diagram.DependencyName] == nil {
-				diagramsByDepRepo[diagram.DependencyName] = make(map[string]DependencyDiagram)
-			}
-			diagramsByDepRepo[diagram.DependencyName][diagram.RepoName] = diagram
+			diagramsByKey[dependencyDiagramKey{Name: dep.Name, Repo: repo, Level: dep.Level}] = dep.DependencyDiagram(repo)
 		}
 	}
 
-	depKeys := []string{}
-	for depKey, _ := range diagramsByDepRepo {
-		depKeys = append(depKeys, depKey)
+	depKeys := dependencyDiagramKeys{}
+	for depKey, _ := range diagramsByKey {
+		depKeys.Append(depKey)
 	}
-	sort.Strings(depKeys)
-	for _, depKey := range depKeys {
-		diagramsByRepo := diagramsByDepRepo[depKey]
-		repos := []string{}
-		for repo, _ := range diagramsByRepo {
-			repos = append(repos, repo)
-		}
-		sort.Strings(repos)
-		for _, repo := range repos {
-			diagrams = append(diagrams, diagramsByRepo[repo])
-		}
+	sort.Sort(&depKeys)
+	sort.Sort(&depKeys)
+	sort.Sort(&depKeys)
+	for _, depKey := range depKeys.Items() {
+		diagrams = append(diagrams, diagramsByKey[depKey])
 	}
 
 	return diagrams
