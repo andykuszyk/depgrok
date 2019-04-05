@@ -9,17 +9,15 @@ import (
 
 func TestDependencyDiagramKeys_Len(t *testing.T) {
 	sut := dependencyDiagramKeys{
-		items: []dependencyDiagramKey{
-			dependencyDiagramKey {
-				Name: "name1",
-				Repo: "repo1",
-				Level: 1,
-			},
-			dependencyDiagramKey {
-				Name: "name2",
-				Repo: "repo2",
-				Level: 2,
-			},
+		dependencyDiagramKey {
+			Name: "name1",
+			Repo: "repo1",
+			Level: 1,
+		},
+		dependencyDiagramKey {
+			Name: "name2",
+			Repo: "repo2",
+			Level: 2,
 		},
 	}
 
@@ -30,96 +28,88 @@ func TestDependencyDiagramKeys_Len(t *testing.T) {
 
 func TestDependencyDiagramKeys_CanSortByName(t *testing.T) {
 	sut := dependencyDiagramKeys{
-		items: []dependencyDiagramKey{
-			dependencyDiagramKey {
-				Name: "name2",
-				Repo: "repo1",
-				Level: 1,
-			},
-			dependencyDiagramKey {
-				Name: "name1",
-				Repo: "repo1",
-				Level: 1,
-			},
+		dependencyDiagramKey {
+			Name: "name2",
+			Repo: "repo1",
+			Level: 1,
+		},
+		dependencyDiagramKey {
+			Name: "name1",
+			Repo: "repo1",
+			Level: 1,
 		},
 	}
 
 	sort.Sort(&sut)
 
-	assert.Equal(t, "name1", sut.items[0].Name)
-	assert.Equal(t, "name2", sut.items[1].Name)
+	assert.Equal(t, "name1", sut[0].Name)
+	assert.Equal(t, "name2", sut[1].Name)
 }
 
 func TestDependencyDiagramKeys_CanSortByRepo(t *testing.T) {
 	sut := dependencyDiagramKeys{
-		items: []dependencyDiagramKey{
-			dependencyDiagramKey {
-				Name: "name1",
-				Repo: "repo2",
-				Level: 1,
-			},
-			dependencyDiagramKey {
-				Name: "name1",
-				Repo: "repo1",
-				Level: 1,
-			},
+		dependencyDiagramKey {
+			Name: "name1",
+			Repo: "repo2",
+			Level: 1,
+		},
+		dependencyDiagramKey {
+			Name: "name1",
+			Repo: "repo1",
+			Level: 1,
 		},
 	}
 
 	sort.Sort(&sut)
 
-	assert.Equal(t, "repo1", sut.items[0].Repo)
-	assert.Equal(t, "repo2", sut.items[1].Repo)
+	assert.Equal(t, "repo1", sut[0].Repo)
+	assert.Equal(t, "repo2", sut[1].Repo)
 }
 
 func TestDependencyDiagramKeys_CanSortByLevel(t *testing.T) {
 	sut := dependencyDiagramKeys{
-		items: []dependencyDiagramKey{
-			dependencyDiagramKey {
-				Name: "name1",
-				Repo: "repo1",
-				Level: 2,
-			},
-			dependencyDiagramKey {
-				Name: "name1",
-				Repo: "repo1",
-				Level: 1,
-			},
+		dependencyDiagramKey {
+			Name: "name1",
+			Repo: "repo1",
+			Level: 2,
+		},
+		dependencyDiagramKey {
+			Name: "name1",
+			Repo: "repo1",
+			Level: 1,
 		},
 	}
 
 	sort.Sort(&sut)
 
-	assert.Equal(t, 1, sut.items[0].Level)
-	assert.Equal(t, 2, sut.items[1].Level)
+	assert.Equal(t, 1, sut[0].Level)
+	assert.Equal(t, 2, sut[1].Level)
 }
 
 func TestDependencyDiagramKeys_CanSortByRepoNameLevel(t *testing.T) {
 	sut := dependencyDiagramKeys{
-		items: []dependencyDiagramKey{
-			dependencyDiagramKey {Name: "name2", Repo: "repo2", Level: 1},
-			dependencyDiagramKey {Name: "name1", Repo: "repo1", Level: 1},
-			dependencyDiagramKey {Name: "name1-ancestor", Repo: "repo1", Level: 2},
-			dependencyDiagramKey {Name: "name1-ancestor", Repo: "repo2", Level: 2},
-			dependencyDiagramKey {Name: "name2", Repo: "repo1", Level: 1},
-			dependencyDiagramKey {Name: "name1", Repo: "repo2", Level: 1},
-		},
+		dependencyDiagramKey {Name: "name2", Repo: "repo2", Level: 1},
+		dependencyDiagramKey {Name: "name1", Repo: "repo1", Level: 1},
+		dependencyDiagramKey {Name: "name1-ancestor", Repo: "repo1", Level: 2},
+		dependencyDiagramKey {Name: "name1-ancestor", Repo: "repo2", Level: 2},
+		dependencyDiagramKey {Name: "name2", Repo: "repo1", Level: 1},
+		dependencyDiagramKey {Name: "name1", Repo: "repo2", Level: 1},
 	}
 
 	sort.Sort(&sut)
 
-	for _, item := range sut.items[:3] {
+	for _, item := range sut[:3] {
 		assert.Equal(t, "repo1", item.Repo)
 	}
-	for _, item := range sut.items[3:] {
+	for _, item := range sut[3:] {
 		assert.Equal(t, "repo2", item.Repo)
 	}
-	assert.Equal(t, "name1", sut.items[0].Name)
-	assert.Equal(t, "name1-ancestor", sut.items[1].Name)
-	assert.Equal(t, "name2", sut.items[2].Name)
-	assert.Equal(t, "name1", sut.items[3].Name)
-	assert.Equal(t, "name1-ancestor", sut.items[4].Name)
-	assert.Equal(t, "name2", sut.items[5].Name)
+	assert.Equal(t, "name1", sut[0].Name)
+	assert.Equal(t, "name1-ancestor", sut[1].Name)
+	assert.Equal(t, "name2", sut[2].Name)
+	assert.Equal(t, "name1", sut[3].Name)
+	assert.Equal(t, "name1-ancestor", sut[4].Name)
+	assert.Equal(t, "name2", sut[5].Name)
 }
 
 func TestBuildDiagrams_WithTwoDepsTwoRepos(t *testing.T) {

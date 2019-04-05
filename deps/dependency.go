@@ -83,25 +83,18 @@ type dependencyDiagramKey struct {
 }
 
 // Represents an array of `dependencyDiagramKey`s, which can be sorted using `sort.Sort()`.
-type dependencyDiagramKeys struct {
-	items []dependencyDiagramKey
-}
-
-// Allows an element to be added to the collection maintained by `dependencyDiagramKeys`.
-func (k *dependencyDiagramKeys) Append(key dependencyDiagramKey) {
-	k.items = append(k.items, key)
-}
+type dependencyDiagramKeys []dependencyDiagramKey
 
 // Provides a `Len` implementation for `sort.Interface`.
-func (k *dependencyDiagramKeys) Len() int {
-	return len(k.items)
+func (k dependencyDiagramKeys) Len() int {
+	return len(k)
 }
 
 // Provides a `Less` implementation for `sort.Interface`, sorting keys
 // repo, name and level.
-func (k *dependencyDiagramKeys) Less(i, j int) bool {
-	elementI := k.items[i]
-	elementJ := k.items[j]
+func (k dependencyDiagramKeys) Less(i, j int) bool {
+	elementI := k[i]
+	elementJ := k[j]
 	if elementI.Repo < elementJ.Repo {
 		return true
 	}
@@ -120,16 +113,11 @@ func (k *dependencyDiagramKeys) Less(i, j int) bool {
 }
 
 // Provides a `Swap` implementation for `sort.Interface`.
-func (k *dependencyDiagramKeys) Swap(i, j int) {
-	elementI := k.items[i]
-	elementJ := k.items[j]
-	k.items[i] = elementJ
-	k.items[j] = elementI
-}
-
-// Exposes the collection of keys maintained by `dependencyDiagramKeys`.
-func (k *dependencyDiagramKeys) Items() []dependencyDiagramKey {
-	return k.items
+func (k dependencyDiagramKeys) Swap(i, j int) {
+	elementI := k[i]
+	elementJ := k[j]
+	k[i] = elementJ
+	k[j] = elementI
 }
 
 // Constructs a set of DependencyDiagram representations from the Dependencies collection
@@ -149,12 +137,12 @@ func (d *Dependencies) BuildDiagrams() []DependencyDiagram {
 
 	depKeys := dependencyDiagramKeys{}
 	for depKey, _ := range diagramsByKey {
-		depKeys.Append(depKey)
+		depKeys = append(depKeys, depKey)
 	}
 	sort.Sort(&depKeys)
 	sort.Sort(&depKeys)
 	sort.Sort(&depKeys)
-	for _, depKey := range depKeys.Items() {
+	for _, depKey := range depKeys {
 		diagrams = append(diagrams, diagramsByKey[depKey])
 	}
 
