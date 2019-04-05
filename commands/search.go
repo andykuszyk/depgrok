@@ -69,7 +69,7 @@ var paralleliseSearches = true
 
 // Iterates over the children of a given parent path, calling searchChildren as a 
 // go routine on each.
-func traverseChildren(parent string, dependencies *deps.Dependencies, level int, wg *sync.WaitGroup, repo string, exclude []string) {
+func traverseChildren(parent string, dependencies *deps.Dependencies, level int, wg *sync.WaitGroup, repo string, exclude []string, repos chan repoCount) {
 	children, err := ioutil.ReadDir(parent)
 	if err != nil {
 		log.Fatalf("An error occured calling ioutil.ReadDir(%s): %v", parent, err)
@@ -113,11 +113,12 @@ func traverseChildren(parent string, dependencies *deps.Dependencies, level int,
 		newRepo := repo
 		if newRepo == "" {
 			newRepo = child.Name()
+			repos <- repoCount{Level: level, Count: 1}
 		}
 		if paralleliseSearches {
-			go searchChildren(newRepo, filepath.Join(parent, child.Name()), dependencies, level, wg, exclude)
+			go searchChildren(newRepo, filepath.Join(parent, child.Name()), dependencies, level, wg, exclude, repos)
 		} else {
-			searchChildren(newRepo, filepath.Join(parent, child.Name()), dependencies, level, wg, exclude)
+			searchChildren(newRepo, filepath.Join(parent, child.Name()), dependencies, level, wg, exclude, repos)
 		}
 	}
 }
@@ -126,7 +127,6 @@ func traverseChildren(parent string, dependencies *deps.Dependencies, level int,
 // updating or augmenting the dependencies list as and when matches are found.
 func searchFile(parent string, repo string, dependencies *deps.Dependencies, parentInfo os.FileInfo, level int) {
 	// Interrogate the file - read its contents out as a string.
-	fmt.Fprintf(os.Stderr, "\rSearching level %d...%s", level, getNextLoadingChar())
 	bytes, err := ioutil.ReadFile(parent)
 	if err != nil {
 		log.Fatalf("Error reading file %s: %v", parent, err)
@@ -156,7 +156,7 @@ func searchFile(parent string, repo string, dependencies *deps.Dependencies, par
 
 // Recursively searches a file tree, amending and augmenting dependencies (at the given
 // level) as matches are discovered.
-func searchChildren(repo string, parent string, dependencies *deps.Dependencies, level int, wg *sync.WaitGroup, exclude []string) {
+func searchChildren(repo string, parent string, dependencies *deps.Dependencies, level int, wg *sync.WaitGroup, exclude []string, repos chan repoCount) {
 	// Ensure that we add a counter to the waitgroup for this function call,
 	// and also wait on the "semaphore" channel to ensure too many parallel
 	// executions of this function are not taking place.
@@ -172,7 +172,7 @@ func searchChildren(repo string, parent string, dependencies *deps.Dependencies,
 	// interrogate its contents.
 	parentInfo := getFileInfo(parent)
 	if parentInfo.IsDir() {
-		traverseChildren(parent, dependencies, level, wg, repo, exclude)
+		traverseChildren(parent, dependencies, level, wg, repo, exclude, repos)
 	} else {
 		searchFile(parent, repo, dependencies, parentInfo, level)
 	}
@@ -193,13 +193,27 @@ func stripExtensionFunc() func(string) string {
 // Strips extensions from file names.
 var stripExtension = stripExtensionFunc()
 
-func logDuration(start time.Time) {
-	fmt.Println("")
-	fmt.Printf("The total time taken was: %v", time.Now().Sub(start).Seconds())
-	fmt.Println("")
+func logDuration(start time.Time, msg string) {
+	fmt.Fprintln(os.Stderr, "")
+	fmt.Fprintf(os.Stderr, "%s: %v", msg, time.Now().Sub(start).Seconds())
+	fmt.Fprintln(os.Stderr, "")
 }
 
 var sem = make(chan int, runtime.NumCPU()*2)
+
+type repoCount struct {
+	Count int
+	Level int
+}
+
+func logRepos(repos chan repoCount) {
+	repoCountByLevel := map[int]int{}
+	for {
+		repoCount, _ := <-repos
+		repoCountByLevel[repoCount.Level] += repoCount.Count
+		fmt.Fprintf(os.Stderr, "\rSearching level %d repos: %d", repoCount.Level, repoCountByLevel[repoCount.Level])
+	}
+}
 
 // The main function for the search command - setups up concurrency primitives and
 // initiates a search of the required depth, collecting depdencies and formating
@@ -214,21 +228,26 @@ func Search(c *cli.Context) {
 	exclude := c.StringSlice("exclude")
 
 	// Record the time now and defer a timer until after execution is complete.
-	start := time.Now()
-	defer logDuration(start)
+	defer logDuration(time.Now(), "Total time")
 
 	// Construct list of dependencies and collect repo relationships
 	// by searching children.
 	wg := sync.WaitGroup{}
 	dependencies := deps.BuildDependencies(strings.Fields(depsArg))
+	repos := make(chan repoCount)
+	go logRepos(repos)
+	start := time.Now()
 	for i := 0; i < depth; i++ {
-		searchChildren("", dir, dependencies, i, &wg, exclude)
+		searchChildren("", dir, dependencies, i, &wg, exclude, repos)
 		wg.Wait()
 	}
+	logDuration(start, "SearchChildren")
 
 	// Print out diagrams to screen in a reasonable order.
 	fmt.Println("")
+	start = time.Now()
 	for _, diagram := range dependencies.BuildDiagrams() {
 		fmt.Println(diagram.Text)
 	}
+	logDuration(start, "BuildDiagrams")
 }

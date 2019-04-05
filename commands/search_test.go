@@ -13,7 +13,7 @@ func TestSearchChildren_ShouldFindSimpleDependency(t *testing.T) {
 	paralleliseSearches = false
 	wg := sync.WaitGroup{}
 	dependencies := deps.BuildDependencies(strings.Fields("dependency1"))
-	searchChildren("", filepath.Join("..", "testdata"), dependencies, 0, &wg, []string{"*.md"})
+	searchChildren("", filepath.Join("..", "testdata"), dependencies, 0, &wg, []string{"*.md"}, make(chan repoCount, 100))
 	wg.Wait()
 	slice := dependencies.Slice()
 	if len(slice) != 2 {
