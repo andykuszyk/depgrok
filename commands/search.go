@@ -283,6 +283,7 @@ func Search(c *cli.Context) {
 	for i := 0; i < depth; i++ {
 		searchChildren("", dir, dependencies, i, &wg, exclude, include, repos)
 		wg.Wait()
+		fmt.Fprintf(os.Stderr, "Number of dependencies after pass %d: %d", i, dependencies.Len())
 	}
 	logDuration(start, "SearchChildren")
 

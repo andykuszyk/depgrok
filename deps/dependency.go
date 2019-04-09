@@ -202,3 +202,7 @@ func (d *Dependencies) Add(dep *Dependency) error {
 	d.dependencies[dep.Name] = dep
 	return nil
 }
+
+func (d *Dependencies) Len() int {
+	return len(d.dependencies)
+}
