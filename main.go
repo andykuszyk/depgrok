@@ -56,7 +56,19 @@ func main() {
 				},
 				cli.StringSliceFlag{
 					Name:  "exclude",
-					Usage: "A glob or file to exclude from the dependency search, e.g. *.md",
+					Usage: "A glob or file to exclude from the dependency search, e.g. *.md. If this option" +
+						" is set, all files will be searched apart from those that match the glob. Cannot be" +
+						" used in conjunction with --include",
+				},
+				cli.StringSliceFlag{
+					Name:  "include",
+					Usage: "A glob or file to include from the dependency search, e.g. *.cs. If this option" +
+						" is set, only files that match the glob will be searched, at the exclusion of all " +
+						"others. Cannot be used in conjunction with --exclude",
+				},
+				cli.BoolFlag{
+					Name: "debug",
+					Usage: "Prints additional debug information to stderr",
 				},
 			},
 		},

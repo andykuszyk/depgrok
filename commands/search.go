@@ -20,7 +20,7 @@ import (
 // otherwise false is returned (e.g. in the case of a filename beginning
 // with ".".
 func isValidParent(parent string) bool {
-	return !(strings.HasPrefix(parent, ".") || parent == "bin")
+	return !(strings.HasPrefix(parent, ".") || parent == "bin" || parent == "obj")
 }
 
 var secondsBetweenLoadingChars = 1.0
@@ -67,9 +67,30 @@ func getFileInfo(path string) os.FileInfo {
 // go routines to be debugged.
 var paralleliseSearches = true
 
+func matchGlob(path string, globs []string) []string {
+	globMatches := []string{}
+	for _, glob := range globs {
+		matches, err := filepath.Glob(filepath.Join(path, glob))
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "An error occured handling the glob (%s): %v", glob, err)
+			continue
+		}
+		globMatches = append(globMatches, matches...)
+	}
+	return globMatches
+}
+
 // Iterates over the children of a given parent path, calling searchChildren as a 
 // go routine on each.
-func traverseChildren(parent string, dependencies *deps.Dependencies, level int, wg *sync.WaitGroup, repo string, exclude []string, repos chan repoCount) {
+func traverseChildren(
+	parent string,
+	dependencies *deps.Dependencies,
+	level int,
+	wg *sync.WaitGroup,
+	repo string,
+	exclude []string,
+	include []string,
+	repos chan repoCount) {
 	children, err := ioutil.ReadDir(parent)
 	if err != nil {
 		log.Fatalf("An error occured calling ioutil.ReadDir(%s): %v", parent, err)
@@ -77,15 +98,7 @@ func traverseChildren(parent string, dependencies *deps.Dependencies, level int,
 
 	// See if any of the children in this parent match the exclusions provided, by first
 	// building up a list of files to exclude.
-	excludeMatches := []string{}
-	for _, exc := range exclude {
-		matches, err := filepath.Glob(filepath.Join(parent, exc))
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "An error occured handling the exclusion (%s): %v", exc, err)
-			continue
-		}
-		excludeMatches = append(excludeMatches, matches...)
-	}
+	excludeMatches := matchGlob(parent, exclude)
 
 	// Traverse the children of the parent, making a recursive call to searchChildren
 	// if its a valid child.
@@ -113,12 +126,11 @@ func traverseChildren(parent string, dependencies *deps.Dependencies, level int,
 		newRepo := repo
 		if newRepo == "" {
 			newRepo = child.Name()
-			repos <- repoCount{Level: level, Count: 1}
 		}
 		if paralleliseSearches {
-			go searchChildren(newRepo, filepath.Join(parent, child.Name()), dependencies, level, wg, exclude, repos)
+			go searchChildren(newRepo, filepath.Join(parent, child.Name()), dependencies, level, wg, exclude, include, repos)
 		} else {
-			searchChildren(newRepo, filepath.Join(parent, child.Name()), dependencies, level, wg, exclude, repos)
+			searchChildren(newRepo, filepath.Join(parent, child.Name()), dependencies, level, wg, exclude, include, repos)
 		}
 	}
 }
@@ -156,7 +168,15 @@ func searchFile(parent string, repo string, dependencies *deps.Dependencies, par
 
 // Recursively searches a file tree, amending and augmenting dependencies (at the given
 // level) as matches are discovered.
-func searchChildren(repo string, parent string, dependencies *deps.Dependencies, level int, wg *sync.WaitGroup, exclude []string, repos chan repoCount) {
+func searchChildren(
+	repo string,
+	parent string,
+	dependencies *deps.Dependencies,
+	level int,
+	wg *sync.WaitGroup,
+	exclude []string,
+	include []string,
+	repos chan repoCount) {
 	// Ensure that we add a counter to the waitgroup for this function call,
 	// and also wait on the "semaphore" channel to ensure too many parallel
 	// executions of this function are not taking place.
@@ -172,9 +192,22 @@ func searchChildren(repo string, parent string, dependencies *deps.Dependencies,
 	// interrogate its contents.
 	parentInfo := getFileInfo(parent)
 	if parentInfo.IsDir() {
-		traverseChildren(parent, dependencies, level, wg, repo, exclude, repos)
+		repos <- repoCount{Level: level, Count: 1, Path: parent}
+		traverseChildren(parent, dependencies, level, wg, repo, exclude, include, repos)
 	} else {
-		searchFile(parent, repo, dependencies, parentInfo, level)
+		// Also, check that the file is supposed to be included.
+		if len(include) > 0 {
+			includeMatches := matchGlob(filepath.Dir(parent), include)
+			for _, includeMatch := range includeMatches {
+				if parent == includeMatch {
+					repos <- repoCount{Level: level, Count: 1, Path: parent}
+					searchFile(parent, repo, dependencies, parentInfo, level)
+				}
+			}
+		} else {
+			repos <- repoCount{Level: level, Count: 1, Path: parent}
+			searchFile(parent, repo, dependencies, parentInfo, level)
+		}
 	}
 }
 
@@ -204,14 +237,19 @@ var sem = make(chan int, runtime.NumCPU()*2)
 type repoCount struct {
 	Count int
 	Level int
+	Path string
 }
 
-func logRepos(repos chan repoCount) {
+func logRepos(repos chan repoCount, debug bool) {
 	repoCountByLevel := map[int]int{}
 	for {
 		repoCount, _ := <-repos
 		repoCountByLevel[repoCount.Level] += repoCount.Count
-		fmt.Fprintf(os.Stderr, "\rSearching level %d repos: %d", repoCount.Level, repoCountByLevel[repoCount.Level])
+		if debug {
+			fmt.Fprintln(os.Stderr, repoCount.Path)
+		} else {
+			fmt.Fprintf(os.Stderr, "\rSearching level %d files: %d", repoCount.Level, repoCountByLevel[repoCount.Level])
+		}
 	}
 }
 
@@ -226,6 +264,11 @@ func Search(c *cli.Context) {
 		log.Fatal("--deps and --dir are required flags")
 	}
 	exclude := c.StringSlice("exclude")
+	include := c.StringSlice("include")
+	if len(exclude) > 0 && len(include) > 0 {
+		log.Fatal("--exclude cannot be used in conjunction with --include")
+	}
+	debug := c.Bool("debug")
 
 	// Record the time now and defer a timer until after execution is complete.
 	defer logDuration(time.Now(), "Total time")
@@ -235,10 +278,10 @@ func Search(c *cli.Context) {
 	wg := sync.WaitGroup{}
 	dependencies := deps.BuildDependencies(strings.Fields(depsArg))
 	repos := make(chan repoCount)
-	go logRepos(repos)
+	go logRepos(repos, debug)
 	start := time.Now()
 	for i := 0; i < depth; i++ {
-		searchChildren("", dir, dependencies, i, &wg, exclude, repos)
+		searchChildren("", dir, dependencies, i, &wg, exclude, include, repos)
 		wg.Wait()
 	}
 	logDuration(start, "SearchChildren")
